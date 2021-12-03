@@ -1,12 +1,14 @@
 import argparse
 import getopt
+import math
 import random
 import sys
+from itertools import combinations, chain
 
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
 from sklearn.neighbors import NearestNeighbors
 import numpy as np
 from sklearn import neighbors, datasets
@@ -32,6 +34,73 @@ def neighbours(train_x, train_y, k):
     return classifier
 
 
+def find_best_subset(estimator, X, y, max_size=8, cv=5, print_progress=True):
+    """
+    Calculates the best model of up to max_size features of X.
+    estimator must have a fit and score functions.
+    X must be a DataFrame.
+    Source of function: https://stackoverflow.com/a/50704252/6400551
+    """
+
+    n_features = X.shape[1]
+    subsets = (combinations(range(n_features), k + 1)
+               for k in range(min(n_features, max_size)))
+
+    subsets_2 = (combinations(range(n_features), k + 1)
+                 for k in range(min(n_features, max_size)))
+
+    best_size_subset = []
+
+    progress_percentage = 0
+    progress = 0
+    # total_combinations = sum(math.comb(n_features, size) for size in range(max_size + 1))
+    total_combinations = 0
+
+    for subsets_k in subsets_2:
+        for subset in subsets_k:
+            total_combinations += 1
+
+    if print_progress:
+        print(f"Looking through {total_combinations} combinations...")
+
+    for subsets_k in subsets:  # for each list of subsets of the same size
+        best_score = -np.inf
+        best_subset = None
+
+        for subset in subsets_k:
+            if print_progress:
+                progress += 1
+
+                percentage = 100.0 * (progress / float(total_combinations))
+                percentage_int = int(percentage)
+
+                if percentage_int > progress_percentage:
+                    progress_percentage = percentage_int
+                    print(f"Progress: {progress_percentage}%")
+
+            estimator.fit(X.iloc[:, list(subset)], y)
+            # get the subset with the best score among subsets of the same size
+            score = estimator.score(X.iloc[:, list(subset)], y)
+            if score > best_score:
+                best_score, best_subset = score, subset
+
+        # to compare subsets of different sizes we must use CV
+        # first store the best subset of each size
+        best_size_subset.append(best_subset)
+
+    # compare best subsets of each size
+    best_score = -np.inf
+    best_subset = None
+    list_scores = []
+    for subset in best_size_subset:
+        score = cross_val_score(estimator, X.iloc[:, list(subset)], y, cv=cv).mean()
+        list_scores.append(score)
+        if score > best_score:
+            best_score, best_subset = score, subset
+
+    return best_subset, best_score, best_size_subset, list_scores
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-pd', '--plot-distribution', dest='pd', action='store_true')
@@ -40,6 +109,7 @@ def main():
     parser.add_argument('-s', '--split', dest='split', action='store', type=float, default=0.75)
     parser.add_argument('-r', '--random-state', dest='random', type=int, default=None)
     parser.add_argument('-k', '--k', dest='k', action='store', type=int, default=10)
+    parser.add_argument('-f', '--feature-analysis', dest='features', action='store_true')
     parser.add_argument('-kmin', '--k-min', dest='kmin', action='store', type=int, default=None)
     parser.add_argument('-kmax', '--k-max', dest='kmax', action='store', type=int, default=None)
     args = parser.parse_args()
@@ -67,12 +137,34 @@ def main():
 
     print(f"k: {args.k} achieves score: {score}")
 
+    if args.features:
+        best_set, best_score, best_size_subset, list_scores = \
+            find_best_subset(neighbors.KNeighborsClassifier(), train_x, train_y)
+
+        print(f"Best subset: {best_set}")
+        print(f"Best score: {best_score}")
+        print(f"Best size subset: {best_size_subset}")
+        print(f"List of scores: {list_scores}")
+
     k_min, k_max = args.kmin, args.kmax
 
     if k_min is not None and k_max is not None:
         k_range = range(k_min, k_max + 1)
         plot_x = []
         plot_y = []
+
+        param_grid = dict(n_neighbors=k_range)
+
+        # # defining parameter range
+        # grid = GridSearchCV(neighbors.KNeighborsClassifier(),
+        #                     param_grid,
+        #                     cv=10,
+        #                     scoring='accuracy',
+        #                     return_train_score=False,
+        #                     verbose=1)
+        #
+        # grid_search = grid.fit(train_x, train_y)
+        # print(grid_search.best_params_)
 
         for current_k in k_range:
             classifier = neighbours(train_x, train_y, current_k)
