@@ -155,17 +155,6 @@ def main():
 
         param_grid = dict(n_neighbors=k_range)
 
-        # # defining parameter range
-        # grid = GridSearchCV(neighbors.KNeighborsClassifier(),
-        #                     param_grid,
-        #                     cv=10,
-        #                     scoring='accuracy',
-        #                     return_train_score=False,
-        #                     verbose=1)
-        #
-        # grid_search = grid.fit(train_x, train_y)
-        # print(grid_search.best_params_)
-
         for current_k in k_range:
             classifier = neighbours(train_x, train_y, current_k)
             score = classifier.score(test_x, test_y)
