@@ -110,6 +110,7 @@ def main():
     parser.add_argument('-r', '--random-state', dest='random', type=int, default=None)
     parser.add_argument('-k', '--k', dest='k', action='store', type=int, default=10)
     parser.add_argument('-f', '--feature-analysis', dest='features', action='store_true')
+    parser.add_argument('-fl', '--feature-list', dest='feature_list', type=lambda x: [int(v) for v in x.split(',')])
     parser.add_argument('-kmin', '--k-min', dest='kmin', action='store', type=int, default=None)
     parser.add_argument('-kmax', '--k-max', dest='kmax', action='store', type=int, default=None)
     args = parser.parse_args()
@@ -125,6 +126,10 @@ def main():
 
     df[args.label] = LabelEncoder().fit_transform(df.Lead.values)
     features = df.drop([args.label], axis=1)
+
+    if args.feature_list is not None:
+        features = features.iloc[:, args.feature_list]
+
     labels = df[args.label]
     state = random.Random().randint(0, 99999) if args.random is None else args.random
 
