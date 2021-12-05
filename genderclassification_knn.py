@@ -43,8 +43,12 @@ def usage():
     print(f"Usage: genderclassification_knn.py --train-file <train.csv> [-pd]")
 
 
-def neighbours(train_x, train_y, k):
-    classifier = neighbors.KNeighborsClassifier(n_neighbors=k)
+def create_classifier(k, is_uniform=True):
+    return neighbors.KNeighborsClassifier(n_neighbors=k, weights='uniform' if is_uniform else 'distance')
+
+
+def neighbours(train_x, train_y, k, is_uniform):
+    classifier = create_classifier(k, is_uniform)
     classifier.fit(train_x, train_y)
     return classifier
 
@@ -121,19 +125,19 @@ def get_split(features, labels, split, random_state=None):
         random_state=state)
 
 
-def get_score(features, labels, split, k, random_state=None):
+def get_score(features, labels, split, k, is_uniform, random_state=None):
     train_x, test_x, train_y, test_y = get_split(features, labels, split, random_state)
-    classifier = neighbours(train_x, train_y, k)
+    classifier = neighbours(train_x, train_y, k, is_uniform)
     return classifier.score(test_x, test_y)
 
 
-def get_average_score(features, labels, split, k, tries=100, random_state=None):
+def get_average_score(features, labels, split, k, is_uniform, tries=100, random_state=None):
     if tries < 1:
         return 0
 
     score_sum = 0
     for i in range(tries):
-        score_sum += get_score(features, labels, split, k, random_state)
+        score_sum += get_score(features, labels, split, k, is_uniform, random_state)
 
     return score_sum / tries
 
@@ -151,6 +155,7 @@ def main():
     parser.add_argument('-fl', '--feature-list', dest='feature_list', type=lambda x: [int(v) for v in x.split(',')])
     parser.add_argument('-kmin', '--k-min', dest='kmin', action='store', type=int, default=None)
     parser.add_argument('-kmax', '--k-max', dest='kmax', action='store', type=int, default=None)
+    parser.add_argument('-dist', '--distance', dest='dist', action='store_true', default=False)
     args = parser.parse_args()
 
     if args.train is None:
@@ -176,6 +181,7 @@ def main():
             labels,
             args.split,
             args.k,
+            not args.dist,
             args.tries,
             args.random)
 
@@ -183,7 +189,7 @@ def main():
 
     if args.features:
         best_set, best_score, best_size_subset, list_scores = \
-            find_best_subset(neighbors.KNeighborsClassifier(), features, labels)
+            find_best_subset(create_classifier(args.k, not args.dist), features, labels)
 
         print(f"Best subset: {best_set}")
         print(f"Best score: {best_score}")
@@ -207,6 +213,7 @@ def main():
                 features=features,
                 labels=labels,
                 k=current_k,
+                is_uniform=not args.dist,
                 split=args.split,
                 tries=args.tries,
                 random_state=args.random)
